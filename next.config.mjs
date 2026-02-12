@@ -1,10 +1,6 @@
-const isWindows = process.platform === "win32";
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Keep standalone output for Linux servers; disable it on Windows to avoid
-  // file tracing/copy issues with absolute drive-letter paths during local builds.
-  output: isWindows ? undefined : "standalone",
+  output: "standalone",
   images: {
     unoptimized: true
   },
