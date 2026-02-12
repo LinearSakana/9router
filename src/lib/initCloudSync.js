@@ -18,8 +18,8 @@ export async function ensureCloudSyncInitialized() {
 // Auto-initialize when module loads
 const isNextBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 if (!isNextBuildPhase) {
+  // Automatically trigger cloud sync initialization during non-build phases to ensure the service is ready on startup
   ensureCloudSyncInitialized().catch(console.log);
 }
 
 export default ensureCloudSyncInitialized;
-
