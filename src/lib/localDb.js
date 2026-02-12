@@ -18,16 +18,11 @@ function getUserDataDir() {
 
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
 
-  const platform = process.platform;
   const homeDir = os.homedir();
   const appName = getAppName();
 
-  if (platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(homeDir, "AppData", "Roaming"), appName);
-  } else {
-    // macOS & Linux: ~/.{appName}
-    return path.join(homeDir, `.${appName}`);
-  }
+  // Use ~/.9router on all platforms to avoid scanning APPDATA during Next build tracing.
+  return path.join(homeDir, `.${appName}`);
 }
 
 // Data file path - stored in user home directory
