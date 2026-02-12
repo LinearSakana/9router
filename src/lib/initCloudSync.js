@@ -16,7 +16,10 @@ export async function ensureCloudSyncInitialized() {
 }
 
 // Auto-initialize when module loads
-ensureCloudSyncInitialized().catch(console.log);
+const isNextBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
+if (!isNextBuildPhase) {
+  ensureCloudSyncInitialized().catch(console.log);
+}
 
 export default ensureCloudSyncInitialized;
 
