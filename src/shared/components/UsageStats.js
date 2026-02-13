@@ -510,7 +510,7 @@ export default function UsageStats() {
               <span className="text-text-muted text-sm uppercase font-semibold">
                 Total Requests
               </span>
-              <span className="text-2xl font-bold">
+              <span className="text-xl font-bold">
                 {fmt(stats.totalRequests)}
               </span>
             </div>
@@ -526,7 +526,7 @@ export default function UsageStats() {
               <span className="text-text-muted text-sm uppercase font-semibold">
                 Total Input Tokens
               </span>
-              <span className="text-2xl font-bold text-primary">
+              <span className="text-xl font-bold text-primary">
                 {fmt(stats.totalPromptTokens)}
               </span>
             </div>
@@ -542,7 +542,7 @@ export default function UsageStats() {
               <span className="text-text-muted text-sm uppercase font-semibold">
                 Output Tokens
               </span>
-              <span className="text-2xl font-bold text-success">
+              <span className="text-xl font-bold text-success">
                 {fmt(stats.totalCompletionTokens)}
               </span>
             </div>
@@ -551,7 +551,7 @@ export default function UsageStats() {
               <span className="text-text-muted text-sm uppercase font-semibold">
                 Total Cost
               </span>
-              <span className="text-2xl font-bold text-warning">
+              <span className="text-xl font-bold text-warning">
                 {fmtCost(stats.totalCost)}
               </span>
             </div>
