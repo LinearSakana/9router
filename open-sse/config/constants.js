@@ -271,21 +271,17 @@ export const DEFAULT_ERROR_MESSAGES = {
 // Exponential backoff config for rate limits (like CLIProxyAPI)
 export const BACKOFF_CONFIG = {
   base: 1000,              // 1 second base
-  max: 2 * 60 * 1000,      // 2 minutes max
+  max: 1 * 60 * 1000,      // 1 minute max
   maxLevel: 15             // Cap backoff level
 };
 
 // Error-based cooldown times (aligned with CLIProxyAPI)
 export const COOLDOWN_MS = {
-  unauthorized: 2 * 60 * 1000,       // 401 → 30 min
-  paymentRequired: 2 * 60 * 1000,    // 402/403 → 30 min
-  notFound: 2 * 60 * 1000,      // 404 → 2 minutes
-  transient: 30 * 1000,               // 408/500/502/503/504 → 1 min
-  requestNotAllowed: 5 * 1000,        // "Request not allowed" → 5 sec
-  // Legacy aliases for backward compatibility
-  rateLimit: 2 * 60 * 1000,
-  serviceUnavailable: 2 * 1000,
-  authExpired: 2 * 60 * 1000
+  unauthorized: 1 * 60 * 1000,       // 401 → 1 min
+  paymentRequired: 1 * 60 * 1000,    // 402/403 → 1 min
+  notFound: 1 * 60 * 1000,      // 404 → 1 minutes
+  transient: 20 * 1000,               // 408/500/502/503/504 → 20 sec
+  requestNotAllowed: 3 * 1000,        // "Request not allowed" → 3 sec
 };
 
 // Skip patterns - requests containing these texts will bypass provider
