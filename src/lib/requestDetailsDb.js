@@ -294,7 +294,8 @@ function safeJsonStringify(obj, maxSize) {
   try {
     const str = JSON.stringify(obj);
     if (str.length > maxSize) {
-      return str.substring(0, maxSize) + "... (truncated due to size limit)";
+      // Return valid JSON instead of truncated invalid string
+      return JSON.stringify({ _truncated: true, _originalSize: str.length, _preview: str.substring(0, 200) });
     }
     return str;
   } catch (error) {
@@ -452,6 +453,12 @@ export async function getRequestDetails(filter = {}) {
   const stmt = db.prepare(query);
   const rows = stmt.all(...params);
 
+  // Safe JSON parse — returns fallback on corrupt/truncated data
+  const safeJsonParse = (str, fallback = {}) => {
+    try { return JSON.parse(str || '{}'); }
+    catch { return fallback; }
+  };
+
   // Convert back to original format
   const details = rows.map(row => ({
     id: row.id,
@@ -460,12 +467,12 @@ export async function getRequestDetails(filter = {}) {
     connectionId: row.connection_id,
     timestamp: new Date(row.timestamp).toISOString(),
     status: row.status,
-    latency: JSON.parse(row.latency || '{}'),
-    tokens: JSON.parse(row.tokens || '{}'),
-    request: JSON.parse(row.request || '{}'),
-    providerRequest: JSON.parse(row.provider_request || '{}'),
-    providerResponse: JSON.parse(row.provider_response || '{}'),
-    response: JSON.parse(row.response || '{}')
+    latency: safeJsonParse(row.latency),
+    tokens: safeJsonParse(row.tokens),
+    request: safeJsonParse(row.request),
+    providerRequest: safeJsonParse(row.provider_request),
+    providerResponse: safeJsonParse(row.provider_response),
+    response: safeJsonParse(row.response)
   }));
 
   return {
@@ -496,6 +503,11 @@ export async function getRequestDetailById(id) {
 
   if (!row) return null;
 
+  const safeJsonParse = (str, fallback = {}) => {
+    try { return JSON.parse(str || '{}'); }
+    catch { return fallback; }
+  };
+
   return {
     id: row.id,
     provider: row.provider,
@@ -503,11 +515,11 @@ export async function getRequestDetailById(id) {
     connectionId: row.connection_id,
     timestamp: new Date(row.timestamp).toISOString(),
     status: row.status,
-    latency: JSON.parse(row.latency || '{}'),
-    tokens: JSON.parse(row.tokens || '{}'),
-    request: JSON.parse(row.request || '{}'),
-    providerRequest: JSON.parse(row.provider_request || '{}'),
-    providerResponse: JSON.parse(row.provider_response || '{}'),
-    response: JSON.parse(row.response || '{}')
+    latency: safeJsonParse(row.latency),
+    tokens: safeJsonParse(row.tokens),
+    request: safeJsonParse(row.request),
+    providerRequest: safeJsonParse(row.provider_request),
+    providerResponse: safeJsonParse(row.provider_response),
+    response: safeJsonParse(row.response)
   };
 }
