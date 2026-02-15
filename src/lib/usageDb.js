@@ -94,13 +94,25 @@ export function trackPendingRequest(model, provider, connectionId, started) {
 }
 
 /**
+ * Check if a connection currently has any pending (in-flight) requests
+ * @param {string} connectionId
+ * @returns {boolean}
+ */
+export function isConnectionBusy(connectionId) {
+  if (!connectionId) return false;
+  const models = pendingRequests.byAccount[connectionId];
+  if (!models) return false;
+  return Object.values(models).some(count => count > 0);
+}
+
+/**
  * Get usage database instance (singleton)
  */
 export async function getUsageDb() {
   if (isCloud) {
     // Return in-memory DB for Workers
     if (!dbInstance) {
-      dbInstance = new Low({ read: async () => {}, write: async () => {} }, defaultData);
+      dbInstance = new Low({ read: async () => { }, write: async () => { } }, defaultData);
       dbInstance.data = defaultData;
     }
     return dbInstance;
@@ -228,7 +240,7 @@ export async function appendRequestLog({ model, provider, connectionId, tokens, 
       if (conn) {
         account = conn.name || conn.email || account;
       }
-    } catch {}
+    } catch { }
 
     const sent = tokens?.prompt_tokens !== undefined ? tokens.prompt_tokens : "-";
     const received = tokens?.completion_tokens !== undefined ? tokens.completion_tokens : "-";
@@ -253,23 +265,23 @@ export async function appendRequestLog({ model, provider, connectionId, tokens, 
  */
 export async function getRecentLogs(limit = 200) {
   if (isCloud) return []; // Skip in Workers
-  
+
   // Runtime check: ensure fs module is available
   if (!fs || typeof fs.existsSync !== "function") {
     console.error("[usageDb] fs module not available in this environment");
     return [];
   }
-  
+
   if (!LOG_FILE) {
     console.error("[usageDb] LOG_FILE path not defined");
     return [];
   }
-  
+
   if (!fs.existsSync(LOG_FILE)) {
     console.log(`[usageDb] Log file does not exist: ${LOG_FILE}`);
     return [];
   }
-  
+
   try {
     const content = fs.readFileSync(LOG_FILE, "utf-8");
     const lines = content.trim().split("\n");

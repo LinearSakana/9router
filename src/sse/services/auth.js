@@ -1,5 +1,6 @@
 import { getProviderConnections, validateApiKey, updateProviderConnection, getSettings } from "@/lib/localDb";
 import { isAccountUnavailable, getUnavailableUntil, getEarliestRateLimitedUntil, formatRetryAfter, checkFallbackError } from "open-sse/services/accountFallback.js";
+import { isConnectionBusy } from "@/lib/usageDb.js";
 import * as log from "../utils/logger.js";
 
 // Mutex to prevent race conditions during account selection
@@ -173,6 +174,8 @@ export async function getProviderCredentials(provider, excludeConnectionId = nul
     if (!connection) {
       if (strategy === "round-robin") {
         const stickyLimit = settings.stickyRoundRobinLimit || 3;
+        // When stickyLimit > 1, prefer idle connections to spread concurrent requests
+        const pendingAware = stickyLimit > 1;
 
         // Sort by lastUsed (most recent first) to find current candidate
         const byRecency = [...availableConnections].sort((a, b) => {
@@ -186,13 +189,32 @@ export async function getProviderCredentials(provider, excludeConnectionId = nul
         const currentCount = current?.consecutiveUseCount || 0;
 
         if (current && current.lastUsedAt && currentCount < stickyLimit) {
-          // Stay with current account
-          connection = current;
-          // Update lastUsedAt and increment count (await to ensure persistence)
-          await updateProviderConnection(connection.id, {
-            lastUsedAt: new Date().toISOString(),
-            consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1
-          });
+          if (pendingAware && isConnectionBusy(current.id) && availableConnections.length > 1) {
+            // Current is busy, try to find an idle connection
+            const idleAlt = availableConnections.find(c => c.id !== current.id && !isConnectionBusy(c.id));
+            if (idleAlt) {
+              connection = idleAlt;
+              log.debug("AUTH", `Pending-aware: skipped busy ${current.id.slice(0, 8)}, using idle ${idleAlt.id.slice(0, 8)}`);
+              await updateProviderConnection(connection.id, {
+                lastUsedAt: new Date().toISOString(),
+                consecutiveUseCount: 1
+              });
+            } else {
+              // All busy, stick with current
+              connection = current;
+              await updateProviderConnection(connection.id, {
+                lastUsedAt: new Date().toISOString(),
+                consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1
+              });
+            }
+          } else {
+            // Stay with current account
+            connection = current;
+            await updateProviderConnection(connection.id, {
+              lastUsedAt: new Date().toISOString(),
+              consecutiveUseCount: (connection.consecutiveUseCount || 0) + 1
+            });
+          }
         } else {
           // Pick the least recently used (excluding current if possible)
           const sortedByOldest = [...availableConnections].sort((a, b) => {
@@ -202,7 +224,12 @@ export async function getProviderCredentials(provider, excludeConnectionId = nul
             return new Date(a.lastUsedAt) - new Date(b.lastUsedAt);
           });
 
-          connection = sortedByOldest[0];
+          if (pendingAware) {
+            const idleConn = sortedByOldest.find(c => !isConnectionBusy(c.id));
+            connection = idleConn || sortedByOldest[0];
+          } else {
+            connection = sortedByOldest[0];
+          }
 
           // Update lastUsedAt and reset count to 1 (await to ensure persistence)
           await updateProviderConnection(connection.id, {
@@ -286,11 +313,11 @@ export async function markAccountUnavailable(connectionId, status, errorText, pr
 export async function clearAccountError(connectionId, currentConnection) {
   // Only update if currently has error status
   const hasError = currentConnection.testStatus === "unavailable" ||
-                   currentConnection.lastError ||
-                   currentConnection.rateLimitedUntil;
-  
+    currentConnection.lastError ||
+    currentConnection.rateLimitedUntil;
+
   if (!hasError) return; // Skip if already clean
-  
+
   await updateProviderConnection(connectionId, {
     testStatus: "active",
     lastError: null,
@@ -298,7 +325,7 @@ export async function clearAccountError(connectionId, currentConnection) {
     rateLimitedUntil: null,
     backoffLevel: 0
   });
-  log.info("AUTH", `Account ${connectionId.slice(0,8)} error cleared`);
+  log.info("AUTH", `Account ${connectionId.slice(0, 8)} error cleared`);
 }
 
 /**
