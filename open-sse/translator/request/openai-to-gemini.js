@@ -18,6 +18,7 @@ import {
   generateProjectId,
   cleanJSONSchemaForAntigravity
 } from "../helpers/geminiHelper.js";
+import { deriveSessionId } from "../../utils/sessionManager.js";
 
 // Core: Convert OpenAI request to Gemini format (base for all variants)
 function openaiToGeminiBase(model, body, stream) {
@@ -259,7 +260,7 @@ function wrapInCloudCodeEnvelope(model, geminiCLI, credentials = null, isAntigra
     userAgent: isAntigravity ? "antigravity" : "gemini-cli",
     requestId: isAntigravity ? `agent-${generateUUID()}` : generateRequestId(),
     request: {
-      sessionId: generateSessionId(),
+      sessionId: isAntigravity ? deriveSessionId(credentials?.email || credentials?.connectionId) : generateSessionId(),
       contents: geminiCLI.contents,
       systemInstruction: geminiCLI.systemInstruction,
       generationConfig: geminiCLI.generationConfig,
@@ -304,7 +305,7 @@ function wrapInCloudCodeEnvelopeForClaude(model, claudeRequest, credentials = nu
     requestId: `agent-${generateUUID()}`,
     requestType: "agent",
     request: {
-      sessionId: generateSessionId(),
+      sessionId: deriveSessionId(credentials?.email || credentials?.connectionId),
       contents: [],
       generationConfig: {
         temperature: claudeRequest.temperature || 1,
