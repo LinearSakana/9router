@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS, OAUTH_ENDPOINTS, HTTP_STATUS, ANTIGRAVITY_HEADERS } from "../config/constants.js";
-import { deriveSessionId } from "../utils/sessionManager.js";
+import { deriveSessionId, getCachedSignature } from "../utils/sessionManager.js";
 
 const MAX_RETRY_AFTER_MS = 10000;
 
@@ -31,6 +31,17 @@ export class AntigravityExecutor extends BaseExecutor {
   transformRequest(model, body, stream, credentials) {
     const projectId = credentials?.projectId || this.generateProjectId();
 
+    const sessionId = body.request?.sessionId || deriveSessionId(credentials?.email || credentials?.connectionId);
+
+    // Get signature for this session (side-channel cache)
+    const cachedSignature = getCachedSignature(sessionId);
+    // DEBUG LOG
+    if (cachedSignature) {
+      console.log(`[AntigravityExecutor] Injecting cached signature for session ${sessionId.substring(0, 8)}...`);
+    } else {
+      // console.log(`[AntigravityExecutor] No cached signature for session ${sessionId.substring(0, 8)}...`);
+    }
+
     // Fix contents for Claude models via Antigravity
     const contents = body.request?.contents?.map(c => {
       let role = c.role;
@@ -38,8 +49,19 @@ export class AntigravityExecutor extends BaseExecutor {
       if (c.parts?.some(p => p.functionResponse)) {
         role = "user";
       }
-      // Strip thought-only parts, keep thoughtSignature on functionCall parts (Gemini 3+ requires it)
-      const parts = c.parts?.filter(p => {
+
+      // Inject signature into functionCall parts
+      let parts = c.parts?.map(p => {
+        if (p.functionCall) {
+          // Use cached signature or random fallback to avoid static fingerprint
+          const signature = cachedSignature || crypto.randomUUID();
+          return { ...p, thoughtSignature: signature };
+        }
+        return p;
+      });
+
+      // Strip thought-only parts
+      parts = parts?.filter(p => {
         if (p.thought && !p.functionCall) return false;
         if (p.thoughtSignature && !p.functionCall && !p.text) return false;
         return true;
@@ -53,7 +75,7 @@ export class AntigravityExecutor extends BaseExecutor {
     const transformedRequest = {
       ...body.request,
       ...(contents && { contents }),
-      sessionId: body.request?.sessionId || deriveSessionId(credentials?.email || credentials?.connectionId),
+      sessionId: sessionId,
       safetySettings: undefined,
       toolConfig: body.request?.tools?.length > 0
         ? { functionCallingConfig: { mode: "VALIDATED" } }

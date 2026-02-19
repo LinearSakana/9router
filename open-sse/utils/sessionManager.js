@@ -24,43 +24,66 @@ const runtimeSessionStore = new Map();
  * - If 9router restarts, the ID changes (matching binary restart behavior).
  * - Within a running instance, the ID is stable for that connection.
  * - This enables prompt caching while using the EXACT random logic of the binary.
- *
- * @param {string} connectionId - The connection identifier (email or unique ID)
- * @returns {string} A stable session ID string matching binary format
+// Map to store latest thinking signatures by session ID for side-channel passing
+const runtimeSignatureStore = new Map();
+
+/**
+ * Get or create a session ID for a given connection/account.
+ * Uses the binary-compatible format: UUID + timestamp
+ * uniqueKey should be accountEmail (preferred) or connectionId
  */
-export function deriveSessionId(connectionId) {
-    if (!connectionId) {
-        // Fallback for requests without a connection identifier
+export function deriveSessionId(uniqueKey) {
+    if (!uniqueKey) {
+        // Fallback if no key provided, but this won't be cached per connection
         return generateBinaryStyleId();
     }
 
-    // Check if we already have a session ID for this connection in this process run
-    if (runtimeSessionStore.has(connectionId)) {
-        return runtimeSessionStore.get(connectionId);
+    if (runtimeSessionStore.has(uniqueKey)) {
+        return runtimeSessionStore.get(uniqueKey);
     }
 
-    // Generate a new ID using the binary's exact logic
     const newSessionId = generateBinaryStyleId();
-
-    // Store it for future requests from this connection
-    runtimeSessionStore.set(connectionId, newSessionId);
-
+    runtimeSessionStore.set(uniqueKey, newSessionId);
     return newSessionId;
 }
 
 /**
- * Generate a Session ID using the binary's exact logic.
- * Format: `rs() + Date.now()` where `rs()` is randomUUID
- *
- * @returns {string} A session ID in binary format
+ * Cache the latest thinking signature for a session.
+ * This is used to pass signatures from response handling (gemini-to-openai)
+ * to request handling (antigravity executor) side-channel, bypassing
+ * the OpenAI intermediate format which drops them.
+ */
+export function cacheSignature(sessionId, signature) {
+    if (!sessionId || !signature) return;
+    // DEBUG LOG: Caching signature
+    console.log(`[SessionManager] Caching signature for ${sessionId.substring(0, 8)}...: ${signature.substring(0, 20)}...`);
+    runtimeSignatureStore.set(sessionId, signature);
+}
+
+/**
+ * Retrieve the cached thinking signature for a session.
+ */
+export function getCachedSignature(sessionId) {
+    const sig = runtimeSignatureStore.get(sessionId);
+    if (sig) {
+        // DEBUG LOG: Retrieving signature
+        console.log(`[SessionManager] Retrieved signature for ${sessionId.substring(0, 8)}...: ${sig.substring(0, 20)}...`);
+    }
+    return sig;
+}
+
+/**
+ * Generate a session ID in the format expected by Antigravity:
+ * randomUUID + Date.now()
  */
 export function generateBinaryStyleId() {
     return crypto.randomUUID() + Date.now().toString();
 }
 
 /**
- * Clears all session IDs (e.g. useful for testing or explicit reset)
+ * Clear session store (e.g., on restart or config change)
  */
 export function clearSessionStore() {
     runtimeSessionStore.clear();
+    runtimeSignatureStore.clear();
 }
