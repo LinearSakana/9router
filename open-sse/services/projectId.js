@@ -98,7 +98,7 @@ export async function getProjectIdForConnection(connectionId, accessToken) {
         return pendingFetches.get(connectionId).promise;
     }
 
-    // Each fetch gets its own AbortController so it can be cancelled via removeConnection()
+    // Each fetch gets its own AbortController so it can be canceled via removeConnection()
     const controller = new AbortController();
 
     const promise = (async () => {

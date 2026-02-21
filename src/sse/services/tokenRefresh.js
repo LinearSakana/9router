@@ -19,7 +19,7 @@ import {
   getAccessToken as _getAccessToken,
   refreshTokenByProvider as _refreshTokenByProvider,
   formatProviderCredentials as _formatProviderCredentials,
-  getAllAccessTokens as _getAllAccessTokens,
+  getAllAccessTokens as _getAllAccessTokens
 } from "open-sse/services/tokenRefresh.js";
 
 export const TOKEN_EXPIRY_BUFFER_MS = BUFFER_MS;
@@ -156,7 +156,7 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
     const result = await updateProviderConnection(connectionId, updates);
     log.info("TOKEN_REFRESH", "Credentials updated in localDb", {
       connectionId,
-      success: !!result,
+      success: !!result
     });
     return !!result;
   } catch (error) {
