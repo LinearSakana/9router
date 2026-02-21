@@ -1,6 +1,7 @@
 // Re-export from open-sse with local logger
 import * as log from "../utils/logger.js";
 import { updateProviderConnection } from "../../lib/localDb.js";
+import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import {
   TOKEN_EXPIRY_BUFFER_MS as BUFFER_MS,
   refreshAccessToken as _refreshAccessToken,
@@ -20,47 +21,47 @@ import {
 export const TOKEN_EXPIRY_BUFFER_MS = BUFFER_MS;
 
 // Wrap functions with local logger
-export const refreshAccessToken = (provider, refreshToken, credentials) => 
+export const refreshAccessToken = (provider, refreshToken, credentials) =>
   _refreshAccessToken(provider, refreshToken, credentials, log);
 
-export const refreshClaudeOAuthToken = (refreshToken) => 
+export const refreshClaudeOAuthToken = (refreshToken) =>
   _refreshClaudeOAuthToken(refreshToken, log);
 
-export const refreshGoogleToken = (refreshToken, clientId, clientSecret) => 
+export const refreshGoogleToken = (refreshToken, clientId, clientSecret) =>
   _refreshGoogleToken(refreshToken, clientId, clientSecret, log);
 
-export const refreshQwenToken = (refreshToken) => 
+export const refreshQwenToken = (refreshToken) =>
   _refreshQwenToken(refreshToken, log);
 
-export const refreshCodexToken = (refreshToken) => 
+export const refreshCodexToken = (refreshToken) =>
   _refreshCodexToken(refreshToken, log);
 
-export const refreshIflowToken = (refreshToken) => 
+export const refreshIflowToken = (refreshToken) =>
   _refreshIflowToken(refreshToken, log);
 
-export const refreshGitHubToken = (refreshToken) => 
+export const refreshGitHubToken = (refreshToken) =>
   _refreshGitHubToken(refreshToken, log);
 
-export const refreshCopilotToken = (githubAccessToken) => 
+export const refreshCopilotToken = (githubAccessToken) =>
   _refreshCopilotToken(githubAccessToken, log);
 
-export const getAccessToken = (provider, credentials) => 
+export const getAccessToken = (provider, credentials) =>
   _getAccessToken(provider, credentials, log);
 
-export const refreshTokenByProvider = (provider, credentials) => 
+export const refreshTokenByProvider = (provider, credentials) =>
   _refreshTokenByProvider(provider, credentials, log);
 
-export const formatProviderCredentials = (provider, credentials) => 
+export const formatProviderCredentials = (provider, credentials) =>
   _formatProviderCredentials(provider, credentials, log);
 
-export const getAllAccessTokens = (userInfo) => 
+export const getAllAccessTokens = (userInfo) =>
   _getAllAccessTokens(userInfo, log);
 
 // Local-specific: Update credentials in localDb
 export async function updateProviderCredentials(connectionId, newCredentials) {
   try {
     const updates = {};
-    
+
     if (newCredentials.accessToken) {
       updates.accessToken = newCredentials.accessToken;
     }
@@ -74,11 +75,14 @@ export async function updateProviderCredentials(connectionId, newCredentials) {
     if (newCredentials.providerSpecificData) {
       updates.providerSpecificData = newCredentials.providerSpecificData;
     }
-    
+    if (newCredentials.projectId) {
+      updates.projectId = newCredentials.projectId;
+    }
+
     const result = await updateProviderConnection(connectionId, updates);
-    log.info("TOKEN_REFRESH", "Credentials updated in localDb", { 
-      connectionId, 
-      success: !!result 
+    log.info("TOKEN_REFRESH", "Credentials updated in localDb", {
+      connectionId,
+      success: !!result
     });
     return !!result;
   } catch (error) {
@@ -108,7 +112,7 @@ export async function checkAndRefreshToken(provider, credentials) {
       const newCredentials = await getAccessToken(provider, updatedCredentials);
       if (newCredentials && newCredentials.accessToken) {
         await updateProviderCredentials(updatedCredentials.connectionId, newCredentials);
-        
+
         updatedCredentials = {
           ...updatedCredentials,
           accessToken: newCredentials.accessToken,
@@ -117,6 +121,27 @@ export async function checkAndRefreshToken(provider, credentials) {
             ? new Date(Date.now() + newCredentials.expiresIn * 1000).toISOString()
             : updatedCredentials.expiresAt
         };
+
+        // Proactively fetch project ID after token refresh (non-blocking)
+        if (provider === "antigravity" || provider === "gemini-cli") {
+          getProjectIdForConnection(updatedCredentials.connectionId, updatedCredentials.accessToken)
+            .then(projectId => {
+              if (projectId && updatedCredentials.connectionId) {
+                updateProviderCredentials(updatedCredentials.connectionId, { projectId }).catch(error => {
+                  log.debug("TOKEN_REFRESH", "Failed to update projectId for connection", {
+                    connectionId: updatedCredentials.connectionId,
+                    error
+                  });
+                });
+              }
+            })
+            .catch(error => {
+              log.debug("TOKEN_REFRESH", "Failed to fetch projectId for connection after token refresh", {
+                connectionId: updatedCredentials.connectionId,
+                error
+              });
+            });
+        }
       }
     }
   }
@@ -141,7 +166,7 @@ export async function checkAndRefreshToken(provider, credentials) {
             copilotTokenExpiresAt: copilotToken.expiresAt
           }
         });
-        
+
         updatedCredentials.providerSpecificData = {
           ...updatedCredentials.providerSpecificData,
           copilotToken: copilotToken.token,
